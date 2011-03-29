@@ -4,12 +4,19 @@ class ErrsController < ApplicationController
   
   def index
     app_scope = current_user.admin? ? App.all : current_user.apps
-    @errs = Err.for_apps(app_scope).unresolved.ordered.paginate(:page => params[:page], :per_page => Err.per_page)
+    respond_to do |format|
+      format.html do
+        @errs = Err.for_apps(app_scope).unresolved.ordered.paginate(:page => params[:page], :per_page => current_user.per_page)
+      end
+      format.atom do
+        @errs = Err.for_apps(app_scope).unresolved.ordered
+      end
+    end
   end
   
   def all
     app_scope = current_user.admin? ? App.all : current_user.apps
-    @errs = Err.for_apps(app_scope).ordered.paginate(:page => params[:page], :per_page => Err.per_page)
+    @errs = Err.for_apps(app_scope).ordered.paginate(:page => params[:page], :per_page => current_user.per_page)
   end
   
   def show
@@ -29,7 +36,10 @@ class ErrsController < ApplicationController
     @err.resolve!
     
     flash[:success] = 'Great news everyone! The err has been resolved.'
-    redirect_to errs_path
+
+    redirect_to :back
+  rescue ActionController::RedirectBackError
+    redirect_to app_path(@app)
   end
   
   protected

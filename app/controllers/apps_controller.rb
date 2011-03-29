@@ -8,7 +8,15 @@ class AppsController < ApplicationController
   end
   
   def show
-    @errs  = @app.errs.paginate(:page => params[:page], :per_page => Err.per_page)
+    respond_to do |format|
+      format.html do
+        @errs = @app.errs.ordered.paginate(:page => params[:page], :per_page => current_user.per_page)
+        @deploys = @app.deploys.order_by(:created_at.desc).limit(5)
+      end
+      format.atom do
+        @errs = @app.errs.unresolved.ordered
+      end
+    end
   end
   
   def new

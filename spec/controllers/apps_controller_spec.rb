@@ -1,7 +1,8 @@
 require 'spec_helper'
 
 describe AppsController do
-  
+  render_views
+
   it_requires_authentication
   it_requires_admin_privileges :for => {:new => :get, :edit => :get, :create => :post, :update => :put, :destroy => :delete}
   
@@ -32,11 +33,13 @@ describe AppsController do
   end
   
   describe "GET /apps/:id" do
-    render_views
     context 'logged in as an admin' do
       before(:each) do
-        sign_in Factory(:admin)
+        @user = Factory(:admin)
+        sign_in @user
         @app = Factory(:app)
+        @err = Factory :err, :app => @app
+        @notice = Factory :notice, :err => @err
       end
 
       it 'finds the app' do
@@ -47,6 +50,29 @@ describe AppsController do
       it "should not raise errors for app with err without notices" do
         Factory :err, :app => @app
         lambda { get :show, :id => @app.id }.should_not raise_error
+      end
+
+      it "should list atom feed successfully" do
+        get :show, :id => @app.id, :format => "atom"
+        response.should be_success
+        response.body.should match(@err.message)
+      end
+
+      context "pagination" do
+        before(:each) do
+          35.times { Factory :err, :app => @app }
+        end
+
+        it "should have default per_page value for user" do
+          get :show, :id => @app.id
+          assigns(:errs).size.should == User::PER_PAGE
+        end
+
+        it "should be able to override default per_page value" do
+          @user.update_attribute :per_page, 10
+          get :show, :id => @app.id
+          assigns(:errs).size.should == 10
+        end
       end
     end
     
@@ -125,10 +151,6 @@ describe AppsController do
       end
     
       context "when the update is successful" do
-        before do
-          @app.should_receive(:update_attributes).and_return(true)
-        end
-      
         it "should redirect to the app page" do
           put :update, :id => @app.id, :app => {}
           response.should redirect_to(app_path(@app))
@@ -137,6 +159,14 @@ describe AppsController do
         it "should display a message" do
           put :update, :id => @app.id, :app => {}
           request.flash[:success].should match(/success/)
+        end
+      end
+
+      context "changing name" do
+        it "should redirect to app page" do
+          id = @app.id
+          put :update, :id => id, :app => {:name => "new name"}
+          response.should redirect_to(app_path(id))
         end
       end
     

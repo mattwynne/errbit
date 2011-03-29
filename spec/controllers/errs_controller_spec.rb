@@ -11,24 +11,48 @@ describe ErrsController do
   let(:err) { Factory(:err, :app => app) }
     
   describe "GET /errs" do
+    render_views
     context 'when logged in as an admin' do
       before(:each) do
-        sign_in Factory(:admin)
+        @user = Factory(:admin)
+        sign_in @user
+        @notice = Factory :notice
+        @err = @notice.err
       end
 
-      it "gets a paginated list of unresolved errs" do
-        errs = WillPaginate::Collection.new(1,30)
-        3.times { errs << Factory(:err) }
-        Err.should_receive(:unresolved).and_return(
-          mock('proxy', :ordered => mock('proxy', :paginate => errs))
-        )
+      it "should successfully list errs" do
         get :index
-        assigns(:errs).should == errs
+        response.should be_success
+        response.body.should match(@err.message)
+      end
+
+      it "should list atom feed successfully" do
+        get :index, :format => "atom"
+        response.should be_success
+        response.body.should match(@err.message)
       end
       
       it "should handle lots of errors" do
+        pending "Turning off long running spec"
         1000.times { Factory :notice }
         lambda { get :index }.should_not raise_error
+      end
+
+      context "pagination" do
+        before(:each) do
+          35.times { Factory :err }
+        end
+
+        it "should have default per_page value for user" do
+          get :index
+          assigns(:errs).size.should == User::PER_PAGE
+        end
+
+        it "should be able to override default per_page value" do
+          @user.update_attribute :per_page, 10
+          get :index
+          assigns(:errs).size.should == 10
+        end
       end
     end
     
@@ -151,7 +175,13 @@ describe ErrsController do
       request.flash[:success].should match(/Great news/)
     end
     
-    it "should redirect do the errs page" do
+    it "should redirect to the app page" do
+      put :resolve, :app_id => @err.app.id, :id => @err.id
+      response.should redirect_to(app_path(@err.app))
+    end
+
+    it "should redirect back to errs page" do
+      request.env["Referer"] = errs_path
       put :resolve, :app_id => @err.app.id, :id => @err.id
       response.should redirect_to(errs_path)
     end
